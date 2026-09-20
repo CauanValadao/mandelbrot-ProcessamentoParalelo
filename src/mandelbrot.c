@@ -184,20 +184,39 @@ MandelbrotParams interface(){
         printf("Digite o nome do cenario (sem espacos): ");
         scanf("%31s", params.cenario);
         printf("Digite o valor de re_min: ");
-        printf("Digite o valor de re_min: ");
         scanf("%lf", &params.re_min);
         printf("Digite o valor de re_max: ");
         scanf("%lf", &params.re_max);
+        while (params.re_max <= params.re_min) {
+            printf("Invalido! re_max deve ser maior que re_min (%lf). Digite novamente: ", params.re_min);
+            scanf("%lf", &params.re_max);
+        }
         printf("Digite o valor de im_min: ");
         scanf("%lf", &params.im_min);
         printf("Digite o valor de im_max: ");
         scanf("%lf", &params.im_max);
+        while (params.im_max <= params.im_min) {
+            printf("Invalido! im_max deve ser maior que im_min (%lf). Digite novamente: ", params.im_min);
+            scanf("%lf", &params.im_max);
+        }
         printf("Digite a largura (width): ");
         scanf("%d", &params.width);
+        while (params.width <= 0) {
+            printf("Invalido! A largura deve ser maior que zero. Digite novamente: ");
+            scanf("%d", &params.width);
+        }
         printf("Digite a altura (height): ");
         scanf("%d", &params.height);
+        while (params.height <= 0) {
+            printf("Invalido! A altura deve ser maior que zero. Digite novamente: ");
+            scanf("%d", &params.height);
+        }
         printf("Digite o numero maximo de iteracoes (max_iter): ");
         scanf("%d", &params.max_iter);
+        while (params.max_iter <= 0) {
+            printf("Invalido! O numero de iteracoes deve ser maior que zero. Digite novamente: ");
+            scanf("%d", &params.max_iter);
+        }
     }
     escolha = 1;
     while(escolha){
@@ -205,37 +224,74 @@ MandelbrotParams interface(){
         printf("Deseja alterar algum parametro? (1 - sim, 0 - nao): ");
         scanf("%d", &escolha);
         if(escolha){
-            printf("Digite o parametro que deseja alterar (1 - re_min, 2 - re_max, 3 - im_min, 4 - im_max, 5 - width, 6 - height, 7 - max_iter): ");
+            printf("Digite o parametro que deseja alterar (1 - re_min, 2 - re_max, 3 - im_min, 4 - im_max, 5 - width, 6 - height, 7 - max_iter, 8 - cenario, 9 - Nao alterar): ");
             int parametro;
             scanf("%d", &parametro);
             switch(parametro){
                 case 1:
                     printf("Digite o valor de re_min: ");
                     scanf("%lf", &params.re_min);
+                    if (params.re_min >= params.re_max) {
+                        printf("Aviso: re_min ficou maior/igual a re_max. Ajustando re_max para re_min + 1.0\n");
+                        params.re_max = params.re_min + 1.0;
+                    }
                     break;
                 case 2:
                     printf("Digite o valor de re_max: ");
                     scanf("%lf", &params.re_max);
+                    while(params.re_max <= params.re_min){
+                        printf("Invalido! re_max deve ser maior que re_min (%lf). Digite novamente: ", params.re_min);
+                        scanf("%lf", &params.re_max);
+                    }
                     break;
                 case 3:
                     printf("Digite o valor de im_min: ");
                     scanf("%lf", &params.im_min);
+                    if (params.im_min >= params.im_max) {
+                        printf("Aviso: im_min ficou maior/igual a im_max. Ajustando im_max para im_min + 1.0\n");
+                        params.im_max = params.im_min + 1.0;
+                    }
                     break;
                 case 4:
                     printf("Digite o valor de im_max: ");
                     scanf("%lf", &params.im_max);
+                    while(params.im_max <= params.im_min){
+                        printf("Invalido! im_max deve ser maior que im_min (%lf). Digite novamente: ", params.im_min);
+                        scanf("%lf", &params.im_max);
+                    }
                     break;
                 case 5:
                     printf("Digite a largura (width): ");
                     scanf("%d", &params.width);
+                    while(params.width <= 0){
+                        printf("Invalido! A largura deve ser maior que zero. Digite novamente: ");
+                        scanf("%d", &params.width);
+                    }
                     break;
                 case 6:
                     printf("Digite a altura (height): ");
                     scanf("%d", &params.height);
+                    while(params.height <= 0){
+                        printf("Invalido! A altura deve ser maior que zero. Digite novamente: ");
+                        scanf("%d", &params.height);
+                    }
                     break;
                 case 7:
                     printf("Digite o numero maximo de iteracoes (max_iter): ");
                     scanf("%d", &params.max_iter);
+                            while(params.max_iter <= 0){
+                        printf("Invalido! O numero de iteracoes deve ser maior que zero. Digite novamente: ");
+                        scanf("%d", &params.max_iter);
+                    }
+                    break;
+                case 8:
+                    printf("Digite o nome do cenario (sem espacos): ");
+                    scanf("%31s", params.cenario);
+                    break;
+                case 9:
+                    break;
+                default:
+                    printf("Opcao invalida, digite novamente.\n");
                     break;
             }
         }
@@ -310,7 +366,7 @@ MandelbrotParams interface(){
         printf("A simetria sera ignorada nesta execucao.\n");
     }
 
-    printf("Deseja salvar a imagem gerada? (1 - sim, 0 - nao): ");
+    printf("Deseja salvar o ppm e o binario(necessario para comparacao dos binarios)? (1 - sim, 0 - nao): ");
     scanf("%d", &params.salvar);
     while(params.salvar != 0 && params.salvar != 1){
         printf("Opcao invalida, digite novamente: ");
@@ -350,7 +406,11 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
 
             if (i == params.run_count - 1) {
                 if (params.salvar) {
-                    salvar_ppm("saida/mandelbrot_paralelo.ppm", cont, params.width, params.height, params.max_iter);
+                    char filename[256];
+                    strcpy(filename, "saida/");
+                    strcat(filename, params.cenario);
+                    strcat(filename, "_paralelo.ppm");   
+                    salvar_ppm(filename, cont, params.width, params.height, params.max_iter);
                     salvar_binario("saida/mandelbrot_paralelo.bin", cont, params.width, params.height);
                 }
                 double tempo;
@@ -395,7 +455,11 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
             resultado.tempos_execucao[i] = tempo_final - tempo_inicial;
 
             if (i == params.run_count - 1 && params.salvar) {
-                salvar_ppm("saida/mandelbrot_sequencial.ppm", cont, params.width, params.height, params.max_iter);
+                char filename[256];
+                strcpy(filename, "saida/");
+                strcat(filename, params.cenario);
+                strcat(filename, "_sequencial.ppm");
+                salvar_ppm(filename, cont, params.width, params.height, params.max_iter);
                 salvar_binario("saida/mandelbrot_sequencial.bin", cont, params.width, params.height);
             }
 

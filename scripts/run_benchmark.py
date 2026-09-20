@@ -22,8 +22,8 @@ import time
 os.makedirs("saida", exist_ok=True)
 
 # Atualizado para refletir a sua estrutura exata de pastas
-SRC_FILE = "src/gera_mandelbrot.c"          
-BIN_FILE = "./saida/mandelbrot"
+SRC_FILE = "src/mandelbrot.c"          
+BIN_FILE = "./mandelbrot.exe"
 PROGRAM_CSV = "saida/benchmark_resultados.csv"   
 MASTER_CSV = "saida/resultados_finais.csv"
 

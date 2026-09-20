@@ -3,6 +3,7 @@
 Le 'resultados_finais.csv' e produz as analises finais:
 Speedup, Eficiência, Fator de Balanceamento e Escalabilidade.
 """
+import os
 import sys
 from pathlib import Path
 import pandas as pd
@@ -16,11 +17,17 @@ except ImportError:
     def _valor_critico(n):
         return 1.96
 
+os.makedirs("saida", exist_ok=True)
+
 CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else "saida/resultados_finais.csv"
 OUT_DIR = Path("graficos")
 OUT_DIR.mkdir(exist_ok=True)
 
 def carregar():
+    if not os.path.exists(CSV_PATH):
+        print(f"Erro: Arquivo '{CSV_PATH}' não encontrado.")
+        sys.exit(1)
+        
     df = pd.read_csv(CSV_PATH)
     # Limpa nomes de colunas
     df.columns = [c.strip() for c in df.columns]
@@ -34,6 +41,9 @@ def carregar():
 def stats_baseline(df):
     seq = df[df["Modo"].str.strip() == "Sequencial"]
     linhas = []
+    if "baseline_key" not in seq.columns:
+        seq["baseline_key"] = seq["caso"] # Fallback caso nao tenha a coluna
+        
     for key, grupo in seq.groupby("baseline_key"):
         n = len(grupo)
         media = grupo["T_Med_Glob"].mean()
@@ -70,26 +80,22 @@ def grafico_strong_scaling(tabela, titulo, arquivo, arquivo_tempo=None, combine_
     if tabela.empty:
         return
         
-    # Agrupa apenas pelo nome do escalonamento (ex: "Dynamic") para unir a linha toda
     group_col = "Escalonamento" if combine_chunks else "Escalonamento_Formatado"
 
-    # Grafico Opcional de Tempo Bruto (Caso A)
     if arquivo_tempo:
         fig_t, ax_t = plt.subplots(figsize=(7, 4.5))
         for esc, grupo in tabela.groupby(group_col):
             grupo = grupo.sort_values("threads_alvo")
-            
             if combine_chunks:
-                # Linha contínua de fundo
                 ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "-", color="gray", alpha=0.5)
-                # Pontos coloridos separados por chunk para a legenda
                 for chunk, subgrupo in grupo.groupby("Chunk"):
                     ax_t.plot(subgrupo["threads_alvo"], subgrupo["T_Med_Glob"], "o", label=f"Chunk={chunk}")
             else:
                 ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "o-", label=esc)
         
-        seq_media = tabela["seq_media"].iloc[0]
-        ax_t.axhline(seq_media, ls="--", color="black", label=f"Sequencial ({seq_media:.2f}s)")
+        if not tabela["seq_media"].isna().all():
+            seq_media = tabela["seq_media"].iloc[0]
+            ax_t.axhline(seq_media, ls="--", color="black", label=f"Sequencial ({seq_media:.2f}s)")
         ax_t.set_xlabel("Threads"); ax_t.set_ylabel("Tempo Médio (s)")
         ax_t.set_title(f"Tempo de Execução — {titulo}")
         ax_t.legend(); ax_t.grid(alpha=0.3)
@@ -99,19 +105,14 @@ def grafico_strong_scaling(tabela, titulo, arquivo, arquivo_tempo=None, combine_
     
     for esc, grupo in tabela.groupby(group_col):
         grupo = grupo.sort_values("threads_alvo")
-        
         if combine_chunks:
-            # Linhas contínuas de fundo
             ax1.plot(grupo["threads_alvo"], grupo["speedup"], "-", color="gray", alpha=0.5)
             ax2.plot(grupo["threads_alvo"], grupo["Eficiência"], "-", color="gray", alpha=0.5)
-            
-            # Pontos de erro (errorbar) coloridos e agrupados por chunk
             for chunk, subgrupo in grupo.groupby("Chunk"):
                 erro_baixo = subgrupo["speedup"] - subgrupo["speedup_min"]
                 erro_alto = subgrupo["speedup_max"] - subgrupo["speedup"]
                 p = ax1.errorbar(subgrupo["threads_alvo"], subgrupo["speedup"],
                              yerr=[erro_baixo, erro_alto], fmt="o", capsize=4, label=f"Chunk={chunk}")
-                             
                 erro_baixo_e = subgrupo["Eficiência"] - subgrupo["Eficiência_min"]
                 erro_alto_e = subgrupo["Eficiência_max"] - subgrupo["Eficiência"]
                 ax2.errorbar(subgrupo["threads_alvo"], subgrupo["Eficiência"],
@@ -121,7 +122,6 @@ def grafico_strong_scaling(tabela, titulo, arquivo, arquivo_tempo=None, combine_
             erro_alto = grupo["speedup_max"] - grupo["speedup"]
             p = ax1.errorbar(grupo["threads_alvo"], grupo["speedup"],
                          yerr=[erro_baixo, erro_alto], fmt="o-", capsize=4, label=esc)
-                         
             erro_baixo_e = grupo["Eficiência"] - grupo["Eficiência_min"]
             erro_alto_e = grupo["Eficiência_max"] - grupo["Eficiência"]
             ax2.errorbar(grupo["threads_alvo"], grupo["Eficiência"],
@@ -141,13 +141,11 @@ def grafico_strong_scaling(tabela, titulo, arquivo, arquivo_tempo=None, combine_
 def grafico_tempo_bruto(tabela, titulo, arquivo, combine_chunks=False):
     if tabela.empty:
         return
-    
     group_col = "Escalonamento" if combine_chunks else "Escalonamento_Formatado"
     fig_t, ax_t = plt.subplots(figsize=(7, 4.5))
     
     for esc, grupo in tabela.groupby(group_col):
         grupo = grupo.sort_values("threads_alvo")
-        
         if combine_chunks:
             ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "-", color="gray", alpha=0.5)
             for chunk, subgrupo in grupo.groupby("Chunk"):
@@ -155,8 +153,10 @@ def grafico_tempo_bruto(tabela, titulo, arquivo, combine_chunks=False):
         else:
             ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "o-", label=esc)
     
-    seq_media = tabela["seq_media"].iloc[0]
-    ax_t.axhline(seq_media, ls="--", color="black", label=f"Sequencial ({seq_media:.2f}s)")
+    if not tabela["seq_media"].isna().all():
+        seq_media = tabela["seq_media"].iloc[0]
+        ax_t.axhline(seq_media, ls="--", color="black", label=f"Sequencial ({seq_media:.2f}s)")
+        
     ax_t.set_xlabel("Threads"); ax_t.set_ylabel("Tempo Médio (s)")
     ax_t.set_title(f"Tempo de Execução — {titulo}")
     ax_t.legend(); ax_t.grid(alpha=0.3)
@@ -166,7 +166,6 @@ def grafico_balanceamento(tabela, titulo, arquivo):
     if tabela.empty:
         return
     fig, ax = plt.subplots(figsize=(7, 4.5))
-    
     for esc, grupo in tabela.groupby("Escalonamento_Formatado"):
         ax.plot(grupo["threads_alvo"], grupo["FatorBal"], "o-", label=esc)
         
@@ -176,40 +175,52 @@ def grafico_balanceamento(tabela, titulo, arquivo):
     ax.legend(); ax.grid(alpha=0.3)
     salvar(fig, arquivo)
 
+def grafico_balanceamento_chunk(tabela, titulo, arquivo):
+    if tabela.empty:
+        return
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    tabela = tabela.sort_values(by="Chunk")
+
+    ax.plot(tabela["Chunk"], tabela["FatorBal"], "o-", color="purple", label="16 Threads (Dynamic)")
+
+    ax.set_xlabel("Tamanho do Chunk")
+    ax.set_ylabel("Fator de Balanço de Carga")
+    ax.set_title(f"Fator de Balanceamento × Tamanho do Chunk — {titulo}")
+    ax.set_xscale("log")
+    ax.set_xticks([1, 2, 4, 16, 64, 256, 1024])
+    ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
+    ax.legend()
+    ax.grid(alpha=0.3)
+    salvar(fig, arquivo) 
+
 def grafico_weak_scaling(tabela, titulo, arquivo):
     if tabela.empty:
         return
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.5))
     
-    # Extrai as resolucoes e o numero de threads
     resolucoes = tabela["Resolucao"].str.split("x").str[0].astype(int)
     threads = tabela["threads_alvo"].astype(int)
     
-    # Gráfico 1: Tempo
     ax1.plot(resolucoes, tabela["T_Med_Glob"], "o-", label="Paralelo (Dynamic, C = 16)")
     t1 = tabela["T_Med_Glob"].iloc[0]
     ax1.axhline(t1, ls="--", color="gray", label="Ideal (constante)")
     
-    # Anota o número de threads ao lado de cada bolinha no gráfico de Tempo
     for x, y, t in zip(resolucoes, tabela["T_Med_Glob"], threads):
         ax1.annotate(f"  {t}t", (x, y), textcoords="offset points", xytext=(5, -3), ha="left", va="center", fontsize=9, color="black", weight="bold")
 
     ax1.set_xlabel("Resolução Escalada (N)"); ax1.set_ylabel("Tempo (s)")
     ax1.set_title(f"Tempo — {titulo}"); ax1.legend(); ax1.grid(alpha=0.3)
 
-    # Gráfico 2: Eficiência
     Eficiência_fraca = t1 / tabela["T_Med_Glob"]
     ax2.plot(resolucoes, Eficiência_fraca, "o-", color="darkorange")
     ax2.axhline(1.0, ls="--", color="gray")
     
-    # Anota o número de threads ao lado de cada bolinha no gráfico de Eficiência
     for x, y, t in zip(resolucoes, Eficiência_fraca, threads):
         ax2.annotate(f"  {t}t", (x, y), textcoords="offset points", xytext=(5, -3), ha="left", va="center", fontsize=9, color="black", weight="bold")
 
     ax2.set_xlabel("Resolução Escalada (N)"); ax2.set_ylabel("Eficiência")
     ax2.set_ylim(0, 1.15); ax2.set_title(f"Eficiência de Escala Fraca")
     ax2.grid(alpha=0.3)
-    
     salvar(fig, arquivo)
     
 def grafico_chunk_effect(tabela, titulo, arquivo):
@@ -217,39 +228,82 @@ def grafico_chunk_effect(tabela, titulo, arquivo):
         return
     fig, ax = plt.subplots(figsize=(7, 4.5))
     
-    # Garante que o dataframe esta ordenado numericamente pelo Chunk
     tabela = tabela.sort_values(by="Chunk")
-    
     ax.plot(tabela["Chunk"], tabela["T_Med_Glob"], "o-", color="purple", label="16 Threads (Dynamic)")
     
     ax.set_xlabel("Tamanho do Chunk"); ax.set_ylabel("Tempo Médio de Execução (s)")
     ax.set_title(f"Efeito do Chunk — {titulo}")
-    ax.set_xscale('log') # Escale logarítmica é ideal para mostrar de 1 até 1024
+    ax.set_xscale('log')
     ax.set_xticks([1, 2, 4, 16, 64, 256, 1024])
-    ax.get_xaxis().set_major_formatter(plt.ScalarFormatter()) # Remove notação científica
+    ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
     ax.legend(); ax.grid(alpha=0.3)
+    salvar(fig, arquivo)
+
+def grafico_simetria(tabela, titulo, arquivo):
+    if tabela.empty:
+        return
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+
+    # Limpa espacos da coluna Simetria gerada pelo C para garantir o agrupamento
+    if "Simetria" in tabela.columns:
+        tabela["Simetria"] = tabela["Simetria"].astype(str).str.strip()
+    
+    # Plota agrupando se a simetria foi aplicada ou nao
+    for simetria, grupo in tabela.groupby("Simetria"):
+        grupo = grupo.sort_values("threads_alvo")
+        
+        # Estilizacao: Verde continuo se COM simetria, Vermelho tracejado se SEM
+        if simetria == "Aplicada":
+            label = "Com Simetria"
+            marker = "o-"
+            color = "green"
+        else:
+            label = "Sem Simetria"
+            marker = "s--"
+            color = "red"
+            
+        ax.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], marker, color=color, label=label)
+
+    ax.set_xlabel("Threads")
+    ax.set_ylabel("Tempo Médio de Execução (s)")
+    ax.set_title(f"Impacto da Simetria no Tempo — {titulo}")
+    ax.legend()
+    ax.grid(alpha=0.3)
     salvar(fig, arquivo)
 
 def main():
     df = carregar()
     baselines = stats_baseline(df)
 
-    # 1. CASO A
+    # 1. CASO A (Gera graficos originais apenas com a versao padrao, que tem simetria)
     tabela_a = montar_tabela(df, baselines, "A_padrao_threads")
-    grafico_strong_scaling(tabela_a, "Região Padrão", "A_speedup_Eficiência.png", combine_chunks=True)
-    grafico_tempo_bruto(tabela_a, "Região Padrão", "A_tempo_bruto.png", combine_chunks=True)
+    if not tabela_a.empty:
+        grafico_strong_scaling(tabela_a, "Região Padrão", "A_speedup_Eficiencia.png", combine_chunks=True)
+        grafico_tempo_bruto(tabela_a, "Região Padrão", "A_tempo_bruto.png", combine_chunks=True)
 
-    # 2. CASO B - Adicionado o gráfico de tempo bruto isolado aqui
+    # COMPARACAO DE SIMETRIA (Usa ambos os cenarios salvos na execucao do Caso A)
+    # Filtra as linhas onde o caso seja "A_padrao_threads" ou "A_padrao_sem_simetria"
+    tabela_simetria = df[(df["Modo"].str.strip() == "Paralelo") & (df["caso"].isin(["A_padrao_threads", "A_padrao_sem_simetria"]))].copy()
+    if not tabela_simetria.empty:
+        grafico_simetria(tabela_simetria, "Região Padrão", "A_impacto_simetria.png")
+
+    # 2. CASO B
     tabela_b = montar_tabela(df, baselines, "B_cavalos_threads")
-    grafico_strong_scaling(tabela_b, "Cavalos-Marinhos", "B_speedup_Eficiência.png")
-    grafico_tempo_bruto(tabela_b, "Cavalos-Marinhos", "B_tempo_bruto.png")
-    grafico_balanceamento(tabela_b, "Cavalos-Marinhos", "B_fator_balanceamento.png")
+    if not tabela_b.empty:
+        grafico_strong_scaling(tabela_b, "Cavalos-Marinhos", "B_speedup_Eficiencia.png")
+        grafico_tempo_bruto(tabela_b, "Cavalos-Marinhos", "B_tempo_bruto.png")
+        grafico_balanceamento(tabela_b, "Cavalos-Marinhos", "B_fator_balanceamento.png")
 
+    # 3. CASO C
     tabela_c = montar_tabela(df, baselines, "C_weak_scaling")
-    grafico_weak_scaling(tabela_c, "Escala Fraca", "C_weak_scaling.png")
+    if not tabela_c.empty:
+        grafico_weak_scaling(tabela_c, "Escala Fraca", "C_weak_scaling.png")
     
+    # 4. CASO D
     tabela_d = df[(df["Modo"].str.strip() == "Paralelo") & (df["caso"] == "D_chunk_effect")].copy()
-    grafico_chunk_effect(tabela_d, "Cavalos-Marinhos", "D_efeito_chunk.png")
+    if not tabela_d.empty:
+        grafico_chunk_effect(tabela_d, "Cavalos-Marinhos", "D_efeito_chunk.png")
+        grafico_balanceamento_chunk(tabela_d, "Cavalos-Marinhos", "D_balanceamento_chunk.png")
 
 if __name__ == "__main__":
     main()

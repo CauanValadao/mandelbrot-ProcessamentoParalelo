@@ -10,10 +10,10 @@ import subprocess
 import sys
 import time
 
-os.makedirs("saida", exist_ok=True) # Garante que a pasta existe
+os.makedirs("saida", exist_ok=True) 
 
 SRC_FILE = "src/mandelbrot.c"
-BIN_FILE = "./saida/mandelbrot"
+BIN_FILE = "./mandelbrot.exe"
 PROGRAM_CSV = "saida/benchmark_resultados.csv"
 MASTER_CSV = "saida/resultados_finais.csv"
 
@@ -50,7 +50,6 @@ N_SEQ_REPETICOES = 10
 RUN_COUNT_SEQ = 3      
 RUN_COUNT_PAR = 30     
 
-# --- A CORREÇÃO CRÍTICA ESTÁ AQUI ---
 HEADER_ESPERADO = [
     "Modo", "Cenario", "Threads", "Escalonamento", "Chunk", "Resolucao",
     "MaxIter", "Vezes", "T_Med_Glob", "T_Min_Glob", "T_Max_Glob",
@@ -61,7 +60,7 @@ HEADER_ESPERADO = [
 
 def compilar():
     print(f"Compilando {SRC_FILE} com otimizacoes de arquitetura...")
-    cmd = ["gcc", "-O3", "-march=native", "-fopenmp", "-o", "mandelbrot", SRC_FILE, "-lm"]
+    cmd = ["gcc", "-O3", "-march=native", "-fopenmp", "-o", BIN_FILE, SRC_FILE, "-lm"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         print("Erro de compilacao:\n", r.stderr)
@@ -72,7 +71,7 @@ def _fmt(x):
     return repr(x) if isinstance(x, float) else str(x)
 
 def montar_input(caso, regiao, width, height, max_iter, is_parallel, threads=None,
-                  schedule=None, chunk=None, run_count=1):
+                  schedule=None, chunk=None, run_count=1, usar_simetria=1):
     linhas = ["2", caso,
               _fmt(regiao["re_min"]), _fmt(regiao["re_max"]),
               _fmt(regiao["im_min"]), _fmt(regiao["im_max"]),
@@ -82,7 +81,8 @@ def montar_input(caso, regiao, width, height, max_iter, is_parallel, threads=Non
         linhas += ["1", str(threads), str(SCHED_CODE[schedule]), str(chunk), "0", "0"]
     else:
         linhas += ["2"]
-    linhas += ["1", "0", str(run_count), "3"]
+    
+    linhas += [str(usar_simetria), "0", str(run_count), "3"]
     return "\n".join(linhas) + "\n"
 
 def _contar_linhas(path):
@@ -97,9 +97,9 @@ def _ultima_linha_nova(path, linhas_antes):
     return todas[-1] if len(todas) > linhas_antes else None
 
 def rodar_um(caso, regiao, width, height, max_iter, is_parallel, threads=None,
-             schedule=None, chunk=None, run_count=1, timeout=7200):
+             schedule=None, chunk=None, run_count=1, timeout=7200, usar_simetria=1):
     entrada = montar_input(caso, regiao, width, height, max_iter, is_parallel,
-                            threads, schedule, chunk, run_count)
+                            threads, schedule, chunk, run_count, usar_simetria)
     linhas_antes = _contar_linhas(PROGRAM_CSV)
 
     t0 = time.time()
@@ -118,9 +118,10 @@ def rodar_um(caso, regiao, width, height, max_iter, is_parallel, threads=None,
         raise RuntimeError("Nenhuma linha nova encontrada em " + PROGRAM_CSV)
 
     modo = "Paralelo" if is_parallel else "Sequencial"
+    sim_str = "Sim" if usar_simetria else "Nao"
     print(f"  [{modo:10s}] threads={threads or '-':<3} sched={schedule or '-':<8} "
-          f"chunk={chunk if chunk is not None else '-':<4} res={width}x{height} "
-          f"max_iter={max_iter:<5} tempo_wall={dt:7.2f}s")
+          f"chunk={chunk if chunk is not None else '-':<4} simetria={sim_str:3s} "
+          f"tempo_wall={dt:7.2f}s")
     return linha
 
 def parse_linha_csv(linha_bruta):
@@ -180,7 +181,8 @@ def main():
     args = ap.parse_args()
     apenas = set(args.apenas.split(",")) if args.apenas else None
 
-    if os.path.exists(PROGRAM_CSV):
+    is_full_run = not apenas or ("A" in apenas and "B" in apenas)
+    if is_full_run and os.path.exists(PROGRAM_CSV):
         backup = PROGRAM_CSV + f".bak.{int(time.time())}"
         shutil.move(PROGRAM_CSV, backup)
         print(f"CSV interno existente movido para '{backup}'.")
@@ -196,10 +198,18 @@ def main():
     if not apenas or "A" in apenas:
         print("\n=== CASO A: regiao padrao (Strong Scaling) ===")
         for t, sched, chunk in CONFIG_A:
-            linha = rodar_um("A_padrao_threads", REGIAO_PADRAO, 4096, 4096, MAX_ITER_PADRAO,
+            # Roda COM simetria (padrão)
+            linha_com = rodar_um("A_padrao_threads", REGIAO_PADRAO, 4096, 4096, MAX_ITER_PADRAO,
                               is_parallel=True, threads=t, schedule=sched, chunk=chunk,
-                              run_count=RUN_COUNT_PAR)
-            coletor.registrar(linha, caso="A_padrao_threads", baseline_key="A_padrao_4096",
+                              run_count=RUN_COUNT_PAR, usar_simetria=1)
+            coletor.registrar(linha_com, caso="A_padrao_threads", baseline_key="A_padrao_4096",
+                               extra={"threads_alvo": t})
+            
+            # Roda SEM simetria
+            linha_sem = rodar_um("A_padrao_sem_simetria", REGIAO_PADRAO, 4096, 4096, MAX_ITER_PADRAO,
+                              is_parallel=True, threads=t, schedule=sched, chunk=chunk,
+                              run_count=RUN_COUNT_PAR, usar_simetria=0)
+            coletor.registrar(linha_sem, caso="A_padrao_sem_simetria", baseline_key="A_padrao_4096",
                                extra={"threads_alvo": t})
 
     if not apenas or "B" in apenas:
