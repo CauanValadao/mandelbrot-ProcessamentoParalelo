@@ -350,8 +350,8 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
 
             if (i == params.run_count - 1) {
                 if (params.salvar) {
-                    salvar_ppm("mandelbrot_paralelo.ppm", cont, params.width, params.height, params.max_iter);
-                    salvar_binario("mandelbrot_paralelo.bin", cont, params.width, params.height);
+                    salvar_ppm("saida/mandelbrot_paralelo.ppm", cont, params.width, params.height, params.max_iter);
+                    salvar_binario("saida/mandelbrot_paralelo.bin", cont, params.width, params.height);
                 }
                 double tempo;
                 if (params.comparar) {
@@ -395,8 +395,8 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
             resultado.tempos_execucao[i] = tempo_final - tempo_inicial;
 
             if (i == params.run_count - 1 && params.salvar) {
-                salvar_ppm("mandelbrot_sequencial.ppm", cont, params.width, params.height, params.max_iter);
-                salvar_binario("mandelbrot_sequencial.bin", cont, params.width, params.height);
+                salvar_ppm("saida/mandelbrot_sequencial.ppm", cont, params.width, params.height, params.max_iter);
+                salvar_binario("saida/mandelbrot_sequencial.bin", cont, params.width, params.height);
             }
 
             free_matriz(cont);
@@ -613,7 +613,7 @@ void salvar_ppm(const char *nome_arquivo, int **matriz, int width, int height, i
 }
 
 void salvar_csv(MandelbrotParams params, EstatisticasTempo est, ComparacaoResultado comp) {
-    FILE *arquivo_csv = fopen("benchmark_resultados.csv", "a");
+    FILE *arquivo_csv = fopen("saida/benchmark_resultados.csv", "a");
     if (arquivo_csv == NULL) {
         printf("Erro ao criar/abrir arquivo CSV.\n");
         return;
