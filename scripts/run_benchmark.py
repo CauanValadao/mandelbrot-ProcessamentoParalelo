@@ -19,10 +19,13 @@ import time
 # CONFIGURACAO -- BATERIA RICA (OVERNIGHT)
 # =============================================================================
 
-SRC_FILE = "mandelbrot.c"          
-BIN_FILE = "./mandelbrot"
-PROGRAM_CSV = "benchmark_resultados.csv"   
-MASTER_CSV = "resultados_mestre.csv"       
+os.makedirs("saida", exist_ok=True)
+
+# Atualizado para refletir a sua estrutura exata de pastas
+SRC_FILE = "src/gera_mandelbrot.c"          
+BIN_FILE = "./saida/mandelbrot"
+PROGRAM_CSV = "saida/benchmark_resultados.csv"   
+MASTER_CSV = "saida/resultados_finais.csv"
 
 N_CORES = os.cpu_count() or 4
 
@@ -76,7 +79,7 @@ _seq_cache = {}
 
 def compilar():
     print(f"Compilando {SRC_FILE} ...")
-    cmd = ["gcc", "-O2", "-fopenmp", "-o", "mandelbrot", SRC_FILE, "-lm"]
+    cmd = ["gcc", "-O3", "-march=native", "-fopenmp", "-o", BIN_FILE, SRC_FILE, "-lm"]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         print("Erro de compilacao:\n", r.stderr)
