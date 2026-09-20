@@ -10,10 +10,12 @@ import subprocess
 import sys
 import time
 
-SRC_FILE = "mandelbrot.c"
-BIN_FILE = "./mandelbrot"
-PROGRAM_CSV = "benchmark_resultados.csv"
-MASTER_CSV = "resultados_finais.csv"
+os.makedirs("saida", exist_ok=True) # Garante que a pasta existe
+
+SRC_FILE = "src/mandelbrot.c"
+BIN_FILE = "./saida/mandelbrot"
+PROGRAM_CSV = "saida/benchmark_resultados.csv"
+MASTER_CSV = "saida/resultados_finais.csv"
 
 SCHED_CODE = {"static": 1, "dynamic": 2, "guided": 3}
 REGIAO_PADRAO = dict(re_min=-2.0, re_max=1.0, im_min=-1.5, im_max=1.5)
