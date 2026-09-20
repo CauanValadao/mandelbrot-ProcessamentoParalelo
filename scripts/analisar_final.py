@@ -16,8 +16,8 @@ except ImportError:
     def _valor_critico(n):
         return 1.96
 
-CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else "resultados_finais.csv"
-OUT_DIR = Path("graficos_finais")
+CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else "saida/resultados_finais.csv"
+OUT_DIR = Path("graficos")
 OUT_DIR.mkdir(exist_ok=True)
 
 def carregar():
