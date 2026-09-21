@@ -72,7 +72,7 @@ def montar_tabela(df, baselines, caso):
 
 def salvar(fig, nome):
     fig.tight_layout()
-    fig.savefig(OUT_DIR / nome, dpi=130)
+    fig.savefig(OUT_DIR / nome, dpi=300)
     plt.close(fig)
     print("Gerado:", nome)
 
@@ -148,7 +148,7 @@ def grafico_tempo_bruto(tabela, titulo, arquivo, combine_chunks=False):
         grupo = grupo.sort_values("threads_alvo")
         if combine_chunks:
             ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "-", color="gray", alpha=0.5)
-            for chunk, subgrupo in grupo.groupby("Chunk"):
+            for chunk, subgrupo in grupo.groupby("Chunk"): # CORRIGIDO AQUI
                 ax_t.plot(subgrupo["threads_alvo"], subgrupo["T_Med_Glob"], "o", label=f"Chunk={chunk}")
         else:
             ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "o-", label=esc)
@@ -160,6 +160,31 @@ def grafico_tempo_bruto(tabela, titulo, arquivo, combine_chunks=False):
     ax_t.set_xlabel("Threads"); ax_t.set_ylabel("Tempo Médio (s)")
     ax_t.set_title(f"Tempo de Execução — {titulo}")
     ax_t.legend(); ax_t.grid(alpha=0.3)
+    salvar(fig_t, arquivo)
+
+def grafico_tempo_zoom(tabela, titulo, arquivo):
+    if tabela.empty:
+        return
+    
+    # Filtra os dados apenas para 8 e 16 threads
+    df_zoom = tabela[tabela["threads_alvo"].isin([8, 16])]
+    if df_zoom.empty:
+        return
+
+    fig_t, ax_t = plt.subplots(figsize=(7, 4.5))
+    
+    for esc, grupo in df_zoom.groupby("Escalonamento_Formatado"):
+        grupo = grupo.sort_values("threads_alvo")
+        ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "o-", label=esc)
+    
+    # Omitimos a linha do sequencial propositalmente para permitir o zoom nos valores baixos
+    
+    ax_t.set_xlabel("Threads")
+    ax_t.set_ylabel("Tempo Médio (s)")
+    ax_t.set_title(f"Tempo de Execução (Zoom 8 e 16t) — {titulo}")
+    ax_t.set_xticks([8, 16])
+    ax_t.legend()
+    ax_t.grid(alpha=0.3)
     salvar(fig_t, arquivo)
 
 def grafico_balanceamento(tabela, titulo, arquivo):
@@ -278,7 +303,7 @@ def main():
     # 1. CASO A (Gera graficos originais apenas com a versao padrao, que tem simetria)
     tabela_a = montar_tabela(df, baselines, "A_padrao_threads")
     if not tabela_a.empty:
-        grafico_strong_scaling(tabela_a, "Região Padrão", "A_speedup_Eficiencia.png", combine_chunks=True)
+        grafico_strong_scaling(tabela_a, "Região Padrão", "A_speedup_eficiência.png", combine_chunks=True)
         grafico_tempo_bruto(tabela_a, "Região Padrão", "A_tempo_bruto.png", combine_chunks=True)
 
     # COMPARACAO DE SIMETRIA (Usa ambos os cenarios salvos na execucao do Caso A)
@@ -290,9 +315,10 @@ def main():
     # 2. CASO B
     tabela_b = montar_tabela(df, baselines, "B_cavalos_threads")
     if not tabela_b.empty:
-        grafico_strong_scaling(tabela_b, "Cavalos-Marinhos", "B_speedup_Eficiencia.png")
+        grafico_strong_scaling(tabela_b, "Cavalos-Marinhos", "B_speedup_eficiência.png")
         grafico_tempo_bruto(tabela_b, "Cavalos-Marinhos", "B_tempo_bruto.png")
         grafico_balanceamento(tabela_b, "Cavalos-Marinhos", "B_fator_balanceamento.png")
+        grafico_tempo_zoom(tabela_b, "Cavalos-Marinhos", "B_tempo_bruto_zoom.png")
 
     # 3. CASO C
     tabela_c = montar_tabela(df, baselines, "C_weak_scaling")
