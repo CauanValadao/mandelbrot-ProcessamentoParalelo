@@ -31,7 +31,9 @@ CONFIG_B = [
     (1, "static", 0), (2, "static", 0), (4, "static", 0), (8, "static", 0), (16, "static", 0),
     (1, "dynamic", 16), (2, "dynamic", 16), (4, "dynamic", 16), (8, "dynamic", 16), (16, "dynamic", 16),
     (1, "guided", 16), (2, "guided", 16), (4, "guided", 16), (8, "guided", 16), (16, "guided", 16),
-    (1, "static", 2), (2, "static", 2), (4, "static", 2), (8, "static", 2), (16, "static", 2)
+    (1, "static", 2), (2, "static", 2), (4, "static", 2), (8, "static", 2), (16, "static", 2),
+    (1, "dynamic", 128), (2, "dynamic", 128), (4, "dynamic", 128), (8, "dynamic", 128), (16, "dynamic", 128),
+    (1, "guided", 128), (2, "guided", 128), (4, "guided", 128), (8, "guided", 128), (16, "guided", 128)
 ]
 CONFIG_C_SCHED_CHUNK = ("dynamic", 16)
 WEAK_SCALING_PAIRS_NAO_TRIVIAIS = [(2, 5793), (4, 8192), (8, 11585), (16, 16384)]
@@ -53,7 +55,7 @@ RUN_COUNT_PAR = 30
 HEADER_ESPERADO = [
     "Modo", "Cenario", "Threads", "Escalonamento", "Chunk", "Resolucao",
     "MaxIter", "Vezes", "T_Med_Glob", "T_Min_Glob", "T_Max_Glob",
-    "T_Med_Seq", "Speedup", "Eficiencia", "FatorBal", "Simetria",
+    "T_Med_Serial","T_Med_Seq", "Speedup", "Eficiencia", "FatorBal", "Simetria",
     "T_Min_Thr", "T_Max_Thr", "T_Med_Thr",
     "Acuracia_%", "Diferentes", "Dif_Alem_Tol", "Aprovado", "Medias_Threads"
 ]

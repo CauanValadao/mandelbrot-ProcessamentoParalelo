@@ -37,6 +37,7 @@ typedef struct {
 
 typedef struct {
     double *tempos_execucao;   // tempo de cada execucao, tamanho run_count
+    double *tempos_execucao_parte_serial; // NOVO: tempo da parte serial (antes do "#pragma omp parallel") de cada execucao, tamanho run_count. So e preenchido no caminho paralelo (is_parallel == 1).
     int run_count;
     double **tempos_thread;     // tempo de cada thread, tamanho num_threads
     int num_threads;
@@ -48,6 +49,7 @@ typedef struct {
     double tempo_medio_exec;
     double tempo_min_exec;
     double tempo_max_exec;
+    double tempo_medio_parte_serial; // NOVO: media do tempo da parte serial (antes da regiao paralela) da funcao mandelbrot
     double tempo_medio_thread;
     double tempo_min_thread;
     double tempo_max_thread;
@@ -89,7 +91,7 @@ const MandelbrotParams MANDELBROT_ESPIRAL = {
     .cenario = "Espiral"
 };
 
-int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int width,int height,int max_iter, double* tempos_thread, int usar_simetria);
+int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int width,int height,int max_iter, double* tempos_thread, int usar_simetria, double* tempo_serial);
 
 void free_matriz(int** cont);
 
@@ -128,7 +130,7 @@ void controlador(){
     printf("INTERFACE DE USUARIO\n");
     while(1){
         MandelbrotParams params = interface();
-        
+
         ResultadoTempos resultado = rodarMandelbrot(params);
 
         EstatisticasTempo est = calcular_estatisticas(&resultado, params.is_parallel);
@@ -386,6 +388,7 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
     resultado.run_count = params.run_count;
     resultado.num_threads = params.num_threads;
     resultado.tempos_execucao = (double*)malloc(sizeof(double) * params.run_count);
+    resultado.tempos_execucao_parte_serial = (double*)calloc(params.run_count, sizeof(double)); // NOVO: fica zerado por padrao; so e preenchido no caminho paralelo (is_parallel == 1)
     resultado.tempos_thread = (double**)malloc(sizeof(double*) * params.run_count);
     for(int i = 0; i < params.run_count; i++){
         resultado.tempos_thread[i] = (double*)malloc(sizeof(double) * resultado.num_threads);
@@ -400,7 +403,7 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
         for(int i = 0; i < params.run_count; i++){
             double tempo_inicial = omp_get_wtime();
 
-            int** cont = mandelbrot(params.re_min, params.re_max, params.im_min, params.im_max, params.width, params.height, params.max_iter, resultado.tempos_thread[i], params.usar_simetria);
+            int** cont = mandelbrot(params.re_min, params.re_max, params.im_min, params.im_max, params.width, params.height, params.max_iter, resultado.tempos_thread[i], params.usar_simetria, &resultado.tempos_execucao_parte_serial[i]); // NOVO: passa o endereco para receber, por referencia, o tempo da parte serial dessa execucao
             double tempo_final = omp_get_wtime();
             resultado.tempos_execucao[i] = tempo_final - tempo_inicial;
 
@@ -477,6 +480,11 @@ void free_resultado_tempos(ResultadoTempos *resultado) {
         free(resultado->tempos_execucao);
         resultado->tempos_execucao = NULL;
     }
+
+    if (resultado->tempos_execucao_parte_serial != NULL) { // NOVO
+        free(resultado->tempos_execucao_parte_serial);
+        resultado->tempos_execucao_parte_serial = NULL;
+    }
     
     if (resultado->tempos_thread != NULL) {
         for(int i = 0; i < resultado->run_count; i++) {
@@ -497,7 +505,9 @@ static int pode_usar_simetria(double im_min, double im_max) {
     return fabs(im_min + im_max) < 1e-9;
 }
 
-int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int width,int height,int max_iter,double* tempos_thread,int usar_simetria){
+int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int width,int height,int max_iter,double* tempos_thread,int usar_simetria, double* tempo_serial){
+
+    double tempo_inicio_funcao = omp_get_wtime(); // NOVO: marca o inicio de toda a funcao, incluindo a parte serial (alocacoes e vetores)
 
     int* matriz = (int*)malloc(sizeof(int)*width*height);
     int** cont = (int**)malloc(sizeof(int*)*width);
@@ -528,6 +538,10 @@ int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int wid
     int altura_calculo = simetria_valida ? (height + 1) / 2 : height;
 
     double tempo_inicial = omp_get_wtime();
+
+    if (tempo_serial != NULL) { // NOVO: registra, por referencia, o tempo gasto na parte serial (do inicio da funcao ate aqui, antes da regiao paralela)
+        *tempo_serial = tempo_inicial - tempo_inicio_funcao;
+    }
 
     #pragma omp parallel 
     { 
@@ -686,9 +700,9 @@ void salvar_csv(MandelbrotParams params, EstatisticasTempo est, ComparacaoResult
     // Grava o cabeçalho alinhado (larguras fixas)
     fseek(arquivo_csv, 0, SEEK_END);
     if (ftell(arquivo_csv) == 0) {
-        fprintf(arquivo_csv, "%-10s, %-16s, %-7s, %-13s, %-5s, %-10s, %-7s, %-5s, %-12s, %-12s, %-12s, %-12s, %-10s, %-10s, %-10s, %-8s, %-12s, %-12s, %-12s, %-10s, %-10s, %-12s, %-10s, %s\n",
+        fprintf(arquivo_csv, "%-10s, %-16s, %-7s, %-13s, %-5s, %-10s, %-7s, %-5s, %-12s, %-12s, %-12s, %-12s, %-12s, %-10s, %-10s, %-10s, %-8s, %-12s, %-12s, %-12s, %-10s, %-10s, %-12s, %-10s, %s\n",
                 "Modo", "Cenario", "Threads", "Escalonamento", "Chunk", "Resolucao", "MaxIter", "Vezes",
-                "T_Med_Glob", "T_Min_Glob", "T_Max_Glob", "T_Med_Seq", "Speedup", "Eficiencia", "FatorBal", "Simetria",
+                "T_Med_Glob", "T_Min_Glob", "T_Max_Glob", "T_Med_Serial", "T_Med_Seq", "Speedup", "Eficiencia", "FatorBal", "Simetria",
                 "T_Min_Thr", "T_Max_Thr", "T_Med_Thr",
                 "Acuracia_%", "Diferentes", "Dif_Alem_Tol", "Aprovado", "Medias_Threads");    }
 
@@ -717,7 +731,7 @@ void salvar_csv(MandelbrotParams params, EstatisticasTempo est, ComparacaoResult
     if (offset > 0) buffer_medias[offset - 1] = '\0'; // Remove o último pipe
 
     // Grava a linha formatada alinhada exatamente com o cabeçalho
-fprintf(arquivo_csv, "%-10s, %-16s, %-7d, %-13s, %-5d, %-10s, %-7d, %-5d, %-12.6lf, %-12.6lf, %-12.6lf, %-12.6lf, %-10.4lf, %-10.4lf, %-10.6lf, %-8s, %-12.6lf, %-12.6lf, %-12.6lf, %-10.4lf, %-10lld, %-12lld, %-10s, %s\n",            
+fprintf(arquivo_csv, "%-10s, %-16s, %-7d, %-13s, %-5d, %-10s, %-7d, %-5d, %-12.6lf, %-12.6lf, %-12.6lf, %-12.6lf, %-12.6lf, %-10.4lf, %-10.4lf, %-10.6lf, %-8s, %-12.6lf, %-12.6lf, %-12.6lf, %-10.4lf, %-10lld, %-12lld, %-10s, %s\n",            
             modo_str, 
             params.cenario,
             est.num_threads, 
@@ -727,6 +741,7 @@ fprintf(arquivo_csv, "%-10s, %-16s, %-7d, %-13s, %-5d, %-10s, %-7d, %-5d, %-12.6
             params.max_iter, 
             params.run_count, 
             est.tempo_medio_exec, est.tempo_min_exec, est.tempo_max_exec, 
+            est.tempo_medio_parte_serial,
             est.media_sequencial, est.speedup, est.eficiencia, 
             est.fator_balanceamento, simetria_str,
             est.tempo_min_thread, est.tempo_max_thread, est.tempo_medio_thread,
@@ -853,6 +868,16 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
             soma_exec += t;
         }
         est.tempo_medio_exec = soma_exec / resultado->run_count;
+    }
+
+    // NOVO: Média do tempo da parte serial (antes do "#pragma omp parallel") dentro da função mandelbrot.
+    // Continua 0.0 quando is_parallel != 1, ja que o vetor foi criado com calloc (zerado).
+    if (resultado->run_count > 0 && resultado->tempos_execucao_parte_serial != NULL) {
+        double soma_serial = 0.0;
+        for (int i = 0; i < resultado->run_count; i++) {
+            soma_serial += resultado->tempos_execucao_parte_serial[i];
+        }
+        est.tempo_medio_parte_serial = soma_serial / resultado->run_count;
     }
 
     // 2. Cálculos das Threads e Fator de Balanceamento

@@ -31,7 +31,7 @@ def carregar():
     df = pd.read_csv(CSV_PATH)
     # Limpa nomes de colunas
     df.columns = [c.strip() for c in df.columns]
-    num_cols = ["Threads", "Chunk", "T_Med_Glob", "T_Min_Glob", "T_Max_Glob", "FatorBal", "repeticao"]
+    num_cols = ["Threads", "Chunk", "T_Med_Glob", "T_Min_Glob", "T_Max_Glob","T_Med_Serial", "FatorBal", "repeticao"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
@@ -148,7 +148,7 @@ def grafico_tempo_bruto(tabela, titulo, arquivo, combine_chunks=False):
         grupo = grupo.sort_values("threads_alvo")
         if combine_chunks:
             ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "-", color="gray", alpha=0.5)
-            for chunk, subgrupo in grupo.groupby("Chunk"): # CORRIGIDO AQUI
+            for chunk, subgrupo in grupo.groupby("Chunk"):
                 ax_t.plot(subgrupo["threads_alvo"], subgrupo["T_Med_Glob"], "o", label=f"Chunk={chunk}")
         else:
             ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "o-", label=esc)
@@ -296,23 +296,156 @@ def grafico_simetria(tabela, titulo, arquivo):
     ax.grid(alpha=0.3)
     salvar(fig, arquivo)
 
+def grafico_composicao_tempo(tabela, titulo, arquivo):
+    """
+    Compara o tempo médio da parte serial com o tempo médio da parte
+    paralela, calculado como:
+
+        T_paralelo = T_total - T_serial
+
+    O eixo Y utiliza escala logarítmica para evidenciar diferenças
+    de magnitude entre as duas parcelas.
+    """
+    if tabela.empty or "T_Med_Serial" not in tabela.columns:
+        return
+
+    df_plot = tabela.copy()
+
+    # Somente as quantidades de threads solicitadas.
+    df_plot = df_plot[df_plot["threads_alvo"].isin([1, 2, 4, 8, 16])].copy()
+    df_plot = df_plot.sort_values("threads_alvo")
+    df_plot = df_plot.drop_duplicates(subset=["threads_alvo"])
+
+    # T_Med_Serial é a média do tempo da parte serial.
+    df_plot["T_Med_Glob"] = pd.to_numeric(df_plot["T_Med_Glob"], errors="coerce")
+    df_plot["T_Med_Serial"] = pd.to_numeric(
+        df_plot["T_Med_Serial"], errors="coerce"
+    )
+
+    df_plot = df_plot.dropna(subset=["T_Med_Glob", "T_Med_Serial"])
+
+    # Tempo médio da parte paralela:
+    # média do tempo total - média do tempo serial.
+    df_plot["T_Med_Paralelo"] = (
+        df_plot["T_Med_Glob"] - df_plot["T_Med_Serial"]
+    )
+
+    # Escala logarítmica não aceita valores <= 0.
+    df_plot = df_plot[
+        (df_plot["T_Med_Serial"] > 0) &
+        (df_plot["T_Med_Paralelo"] > 0)
+    ].copy()
+
+    if df_plot.empty:
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    ax.plot(
+        df_plot["threads_alvo"],
+        df_plot["T_Med_Paralelo"],
+        "o-",
+        linewidth=2,
+        label="Parte paralela"
+    )
+
+    ax.plot(
+        df_plot["threads_alvo"],
+        df_plot["T_Med_Serial"],
+        "s-",
+        linewidth=2,
+        label="Parte serial"
+    )
+
+    ax.set_yscale("log")
+    ax.set_xticks([1, 2, 4, 8, 16])
+
+    ax.set_xlabel("Número de Threads")
+    ax.set_ylabel("Tempo Médio de Execução (s) — escala logarítmica")
+    ax.set_title(f"Composição do Tempo de Execução — {titulo}")
+
+    ax.grid(True, which="both", alpha=0.3)
+    ax.legend()
+
+    # Exibe os valores calculados sobre os pontos.
+    for _, linha in df_plot.iterrows():
+        ax.annotate(
+            f'{linha["T_Med_Paralelo"]:.6f}s',
+            (linha["threads_alvo"], linha["T_Med_Paralelo"]),
+            textcoords="offset points",
+            xytext=(0, -14),
+            ha="center",
+            fontsize=8
+        )
+
+        ax.annotate(
+            f'{linha["T_Med_Serial"]:.6f}s',
+            (linha["threads_alvo"], linha["T_Med_Serial"]),
+            textcoords="offset points",
+            xytext=(0, 8),
+            ha="center",
+            fontsize=8
+        )
+
+    salvar(fig, arquivo)
+
+def gerar_tabela_relatorio(df, baselines):
+    if df.empty:
+        return
+        
+    # Faz o merge para recuperar o tempo sequencial base de cada cenário
+    df_calc = df.merge(baselines[["baseline_key", "seq_media"]], on="baseline_key", how="left")
+    
+    # Recalcula Speedup e Eficiência matematicamente corretos em relação à base sequencial
+    df_calc["Speedup_Real"] = df_calc.apply(
+        lambda r: r["seq_media"] / r["T_Med_Glob"] if r["Modo"].strip() == "Paralelo" else 1.0, axis=1
+    )
+    df_calc["Eficiencia_Real"] = df_calc.apply(
+        lambda r: r["Speedup_Real"] / r["Threads"] if r["Modo"].strip() == "Paralelo" else 1.0, axis=1
+    )
+    
+    # Substitui os -1 impressos pelo C pelos cálculos reais do Python
+    df_calc["Speedup"] = df_calc["Speedup_Real"]
+    df_calc["Eficiencia"] = df_calc["Eficiencia_Real"]
+    
+    colunas_importantes = [
+        "caso", "Modo", "Threads", "Escalonamento", "Chunk", 
+        "Resolucao", "T_Med_Serial","T_Med_Glob", "Speedup", "Eficiencia", "FatorBal"
+    ]
+    
+    colunas_usar = [c for c in colunas_importantes if c in df_calc.columns]
+    df_relatorio = df_calc[colunas_usar].copy()
+    
+    cols_numericas = df_relatorio.select_dtypes(include=['float64']).columns
+    df_relatorio[cols_numericas] = df_relatorio[cols_numericas].round(4)
+    
+    df_relatorio = df_relatorio.drop_duplicates(subset=["caso", "Threads", "Escalonamento", "Chunk", "Resolucao"])
+    
+    # Salva em formato Markdown
+    caminho_md = OUT_DIR / "tabela_bruta_relatorio.md"
+    with open(caminho_md, "w", encoding="utf-8") as f:
+        f.write(df_relatorio.to_markdown(index=False))
+        
+    # Salva em formato CSV
+    caminho_csv = OUT_DIR / "tabela_bruta_relatorio.csv"
+    df_relatorio.to_csv(caminho_csv, index=False)
+        
+    print(f"Tabela consolidada gerada com sucesso em:\n - {caminho_md}\n - {caminho_csv}")
+
 def main():
     df = carregar()
     baselines = stats_baseline(df)
 
-    # 1. CASO A (Gera graficos originais apenas com a versao padrao, que tem simetria)
     tabela_a = montar_tabela(df, baselines, "A_padrao_threads")
     if not tabela_a.empty:
         grafico_strong_scaling(tabela_a, "Região Padrão", "A_speedup_eficiência.png", combine_chunks=True)
         grafico_tempo_bruto(tabela_a, "Região Padrão", "A_tempo_bruto.png", combine_chunks=True)
+        grafico_composicao_tempo(tabela_a, "Região Padrão", "A_composicao_tempo.png")
 
-    # COMPARACAO DE SIMETRIA (Usa ambos os cenarios salvos na execucao do Caso A)
-    # Filtra as linhas onde o caso seja "A_padrao_threads" ou "A_padrao_sem_simetria"
     tabela_simetria = df[(df["Modo"].str.strip() == "Paralelo") & (df["caso"].isin(["A_padrao_threads", "A_padrao_sem_simetria"]))].copy()
     if not tabela_simetria.empty:
         grafico_simetria(tabela_simetria, "Região Padrão", "A_impacto_simetria.png")
 
-    # 2. CASO B
     tabela_b = montar_tabela(df, baselines, "B_cavalos_threads")
     if not tabela_b.empty:
         grafico_strong_scaling(tabela_b, "Cavalos-Marinhos", "B_speedup_eficiência.png")
@@ -320,16 +453,17 @@ def main():
         grafico_balanceamento(tabela_b, "Cavalos-Marinhos", "B_fator_balanceamento.png")
         grafico_tempo_zoom(tabela_b, "Cavalos-Marinhos", "B_tempo_bruto_zoom.png")
 
-    # 3. CASO C
     tabela_c = montar_tabela(df, baselines, "C_weak_scaling")
     if not tabela_c.empty:
         grafico_weak_scaling(tabela_c, "Escala Fraca", "C_weak_scaling.png")
     
-    # 4. CASO D
     tabela_d = df[(df["Modo"].str.strip() == "Paralelo") & (df["caso"] == "D_chunk_effect")].copy()
     if not tabela_d.empty:
         grafico_chunk_effect(tabela_d, "Cavalos-Marinhos", "D_efeito_chunk.png")
         grafico_balanceamento_chunk(tabela_d, "Cavalos-Marinhos", "D_balanceamento_chunk.png")
+
+    # CHAMADA CORRIGIDA: Envia as métricas base (baselines) para a função de exportação
+    gerar_tabela_relatorio(df, baselines)
 
 if __name__ == "__main__":
     main()
