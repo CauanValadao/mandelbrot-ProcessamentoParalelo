@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Orquestrador de testes de benchmark HÍBRIDO - DEC107.
 
@@ -14,10 +13,6 @@ import shutil
 import subprocess
 import sys
 import time
-
-# =============================================================================
-# CONFIGURACAO -- BATERIA RICA (OVERNIGHT)
-# =============================================================================
 
 os.makedirs("saida", exist_ok=True)
 
@@ -62,10 +57,6 @@ RES_CAVALOS = 4096
 # Reaproveita a medicao sequencial pesada na mesma regiao/resolucao
 PAREAR_SEQUENCIAL_SEMPRE = False
 
-# =============================================================================
-# LOGICA DE EXECUCAO E ORQUESTRACAO
-# =============================================================================
-
 SCHED_CODE = {"static": 1, "dynamic": 2, "guided": 3}
 
 HEADER_ESPERADO = ["Modo", "Cenario", "Threads", "Escalonamento", "Chunk", "Resolucao",
@@ -94,7 +85,7 @@ def _fmt(x):
 def montar_input(caso, regiao, width, height, max_iter, is_parallel, threads=None,
                   schedule=None, chunk=None, comparar=0, run_count=1):
     linhas = ["2",  
-              caso,  # NOVO: Envia o nome do cenário para o scanf("%31s") do C
+              caso,  
               _fmt(regiao["re_min"]), _fmt(regiao["re_max"]),
               _fmt(regiao["im_min"]), _fmt(regiao["im_max"]),
               str(width), str(height), str(max_iter),
@@ -112,8 +103,7 @@ def montar_input(caso, regiao, width, height, max_iter, is_parallel, threads=Non
                str(run_count),
                "3"]               
     return "\n".join(linhas) + "\n"
-
-
+                      
 def _contar_linhas(path):
     if not os.path.exists(path):
         return 0
@@ -208,7 +198,6 @@ def rodar_par(coletor, caso, regiao, width, height, max_iter, threads, schedule,
     key = _seq_key(regiao, width, height, max_iter, run_count)
     if not PAREAR_SEQUENCIAL_SEMPRE and key in _seq_cache:
         linha_seq = _seq_cache[key]
-        #print("  [Sequencial] (reaproveitado via cache da resolucao/iteracao)")
     else:
         linha_seq = rodar_um(caso, regiao, width, height, max_iter, is_parallel=False,
                               run_count=run_count)
@@ -240,8 +229,6 @@ def main():
 
     coletor = Coletor()
 
-    # ================= CASOS PRIMARIOS (VARIAÇÃO BASE) =================
-
     if not apenas or "A" in apenas:
         print(f"\n=== CASO A: Regiao Padrao (Strong Scaling Básico) ===")
         for i, t in enumerate(THREADS_STRONG):
@@ -266,9 +253,6 @@ def main():
             rodar_par(coletor, "C_weak_scaling", REGIAO_PADRAO, res, res, MAX_ITER_PADRAO,
                       threads=t, schedule="dynamic", chunk=0, comparar=0,
                       run_count=RUN_COUNT_WEAK, extra={"threads_alvo": t})
-
-
-    # ================= CASOS SECUNDÁRIOS (VARIAÇÃO COMPLETA) =================
 
     if not apenas or "A2" in apenas:
         print(f"\n=== CASO A2: Regiao Padrao (ESTRESSE - Threads x Sched x Chunk) ===")
