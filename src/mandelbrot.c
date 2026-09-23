@@ -8,9 +8,9 @@
 
 
 typedef struct {
-    int is_parallel; // 1 for parallel, 0 for sequential
-    int salvar; // 1 to save the image, 0 otherwise
-    int run_count; // number of times to run the code
+    int is_parallel; 
+    int salvar; 
+    int run_count;
     double re_min;
     double re_max;
     double im_min;
@@ -18,12 +18,12 @@ typedef struct {
     int width;
     int height;
     int max_iter;
-    int num_threads; // number of threads to use (for parallel execution)
+    int num_threads; 
     omp_sched_t escalonamento;
     int C;
     int comparar;
     int calcular_speedup_eficiencia;
-    int usar_simetria; // 1 para tentar aproveitar a simetria em torno do eixo real, 0 caso contrario
+    int usar_simetria; 
     char cenario[32];
 } MandelbrotParams;
 
@@ -32,12 +32,12 @@ typedef struct {
     long long iguais;
     long long diferentes;
     long long diferentes_alem_tolerancia;
-    int aprovado; // 1 para sim, 0 para nao
+    int aprovado; 
 } ComparacaoResultado;
 
 typedef struct {
     double *tempos_execucao;   // tempo de cada execucao, tamanho run_count
-    double *tempos_execucao_parte_serial; // NOVO: tempo da parte serial (antes do "#pragma omp parallel") de cada execucao, tamanho run_count. So e preenchido no caminho paralelo (is_parallel == 1).
+    double *tempos_execucao_parte_serial;
     int run_count;
     double **tempos_thread;     // tempo de cada thread, tamanho num_threads
     int num_threads;
@@ -49,13 +49,13 @@ typedef struct {
     double tempo_medio_exec;
     double tempo_min_exec;
     double tempo_max_exec;
-    double tempo_medio_parte_serial; // NOVO: media do tempo da parte serial (antes da regiao paralela) da funcao mandelbrot
+    double tempo_medio_parte_serial; //media do tempo da parte serial (antes da regiao paralela) da funcao mandelbrot
     double tempo_medio_thread;
     double tempo_min_thread;
     double tempo_max_thread;
     double fator_balanceamento;
-    double *medias_por_thread; // NOVO: Armazena a média individual de cada thread
-    int num_threads;           // NOVO: Facilita na hora de gravar no arquivo
+    double *medias_por_thread; //Armazena a média individual de cada thread
+    int num_threads;           //Facilita na hora de gravar no arquivo
     double speedup;
     double eficiencia;
     double media_sequencial;
@@ -507,7 +507,7 @@ static int pode_usar_simetria(double im_min, double im_max) {
 
 int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int width,int height,int max_iter,double* tempos_thread,int usar_simetria, double* tempo_serial){
 
-    double tempo_inicio_funcao = omp_get_wtime(); // NOVO: marca o inicio de toda a funcao, incluindo a parte serial (alocacoes e vetores)
+    double tempo_inicio_funcao = omp_get_wtime();
 
     int* matriz = (int*)malloc(sizeof(int)*width*height);
     int** cont = (int**)malloc(sizeof(int*)*width);
@@ -532,14 +532,13 @@ int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int wid
         c_imagVet[j] = im_min + ((double)j / (height - 1)) * (im_max - im_min);
     }
 
-    // Com simetria valida, so precisamos calcular metade das linhas (eixo j);
-    // a outra metade e espelhada (mesma contagem de iteracoes).
+
     int simetria_valida = usar_simetria && pode_usar_simetria(im_min, im_max);
     int altura_calculo = simetria_valida ? (height + 1) / 2 : height;
 
     double tempo_inicial = omp_get_wtime();
 
-    if (tempo_serial != NULL) { // NOVO: registra, por referencia, o tempo gasto na parte serial (do inicio da funcao ate aqui, antes da regiao paralela)
+    if (tempo_serial != NULL) { 
         *tempo_serial = tempo_inicial - tempo_inicio_funcao;
     }
 
@@ -657,7 +656,6 @@ void free_matriz(int** cont) {
 }
 
 void salvar_ppm(const char *nome_arquivo, int **matriz, int width, int height, int max_iter) {
-    // Abre em "wb" (write binary), essencial para o formato P6
     FILE *arquivo = fopen(nome_arquivo, "wb");
     if (arquivo == NULL) {
         printf("Erro ao abrir o arquivo para escrita!\n");
@@ -665,7 +663,6 @@ void salvar_ppm(const char *nome_arquivo, int **matriz, int width, int height, i
     }
 
     // 1. Escreve o cabeçalho PPM (P6)
-    // 255 é o limite padrão para os canais RGB
     fprintf(arquivo, "P6\n");
     fprintf(arquivo, "%d %d\n", width, height);
     fprintf(arquivo, "255\n");
@@ -675,10 +672,8 @@ void salvar_ppm(const char *nome_arquivo, int **matriz, int width, int height, i
         for (int i = 0; i < width; i++) {     // Coluna (X)
             unsigned char r, g, b;
             
-            // Mapeia o número de iterações do pixel atual para a cor RGB
             mapa_de_cor(matriz[i][j], max_iter, &r, &g, &b);
             
-            // Escreve os 3 bytes (R, G, B) diretamente no arquivo
             fputc(r, arquivo);
             fputc(g, arquivo);
             fputc(b, arquivo);
@@ -706,7 +701,6 @@ void salvar_csv(MandelbrotParams params, EstatisticasTempo est, ComparacaoResult
                 "T_Min_Thr", "T_Max_Thr", "T_Med_Thr",
                 "Acuracia_%", "Diferentes", "Dif_Alem_Tol", "Aprovado", "Medias_Threads");    }
 
-    // Configuração de strings
     const char* modo_str = (params.is_parallel == 1) ? "Paralelo" : "Sequencial";
     const char* esc_str = "N/A";
     if (params.is_parallel == 1) {
@@ -756,7 +750,6 @@ fprintf(arquivo_csv, "%-10s, %-16s, %-7d, %-13s, %-5d, %-10s, %-7d, %-5d, %-12.6
 }
 
 static void mapa_de_cor(int iter, int max_iter, unsigned char *r, unsigned char *g, unsigned char *b) {
-    // Cor de dentro do fractal (quando atinge o limite de iterações)
     if (iter >= max_iter) {
         *r = 11; *g = 29; *b = 58; // Um tom de azul escuro
         return;
@@ -786,17 +779,6 @@ void salvar_binario(const char *nome_arquivo, int **matriz, int width, int heigh
         printf("Erro ao abrir o arquivo binario para escrita: %s\n", nome_arquivo);
         return;
     }
-
-    /*
-     * O arquivo deve conter inteiros de 32 bits em ordem row-major:
-     *
-     * linha 0: matriz[0][0], matriz[1][0], ..., matriz[width-1][0]
-     * linha 1: matriz[0][1], matriz[1][1], ..., matriz[width-1][1]
-     * ...
-     *
-     * A matriz em memoria usa matriz[x][y], por isso a ordem dos lacos
-     * abaixo e y (linha) depois x (coluna).
-     */
     for (int j = 0; j < height; j++) {
         for (int i = 0; i < width; i++) {
             int32_t valor = (int32_t)matriz[i][j];
@@ -870,8 +852,7 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
         est.tempo_medio_exec = soma_exec / resultado->run_count;
     }
 
-    // NOVO: Média do tempo da parte serial (antes do "#pragma omp parallel") dentro da função mandelbrot.
-    // Continua 0.0 quando is_parallel != 1, ja que o vetor foi criado com calloc (zerado).
+
     if (resultado->run_count > 0 && resultado->tempos_execucao_parte_serial != NULL) {
         double soma_serial = 0.0;
         for (int i = 0; i < resultado->run_count; i++) {
@@ -893,7 +874,7 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
         // Loop que calcula o Fator e os Extremos
         for (int r = 0; r < resultado->run_count; r++) {
             double max_thread_rodada = resultado->tempos_thread[r][0];
-            double min_thread_rodada = resultado->tempos_thread[r][0]; // Novo
+            double min_thread_rodada = resultado->tempos_thread[r][0]; 
             double soma_thread_rodada = 0.0;
             
             for (int t = 0; t < resultado->num_threads; t++) {
@@ -903,13 +884,13 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
                 if (tempo_t > est.tempo_max_thread) est.tempo_max_thread = tempo_t;
                 
                 if (tempo_t > max_thread_rodada) max_thread_rodada = tempo_t;
-                if (tempo_t < min_thread_rodada) min_thread_rodada = tempo_t; // Novo
+                if (tempo_t < min_thread_rodada) min_thread_rodada = tempo_t; 
                 
                 soma_thread_rodada += tempo_t;
                 soma_global_threads += tempo_t;
             }
             
-            // Fórmula exigida pelo professor: (Tmax - Tmin) / Tmax
+            // Fórmula exigida: (Tmax - Tmin) / Tmax
             double fator_rodada = (max_thread_rodada > 0.0) ? ((max_thread_rodada - min_thread_rodada) / max_thread_rodada) : 0.0;
             soma_fator += fator_rodada;
         }
@@ -918,7 +899,7 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
         est.fator_balanceamento = soma_fator / resultado->run_count;
         est.tempo_medio_thread = soma_global_threads / (resultado->run_count * resultado->num_threads);
         
-        // Loop NOVO: Calcula a média INDIVIDUAL de cada thread
+        //Calcula a média INDIVIDUAL de cada thread
         for (int t = 0; t < resultado->num_threads; t++) {
             double soma_t = 0.0;
             for (int r = 0; r < resultado->run_count; r++) {

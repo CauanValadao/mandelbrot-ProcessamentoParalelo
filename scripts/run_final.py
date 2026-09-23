@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Orquestrador FINAL - DEC107.
 """
