@@ -3,14 +3,11 @@ import filecmp
 import os
 
 # ==========================================
-# 1. Configurações (ajuste se necessário)
+# 1. Configurações 
 # ==========================================
-# Comando para rodar o seu programa em C. 
-# Se você tiver executáveis separados, adicione ambos.
 COMANDO_EXECUCAO = "./mandelbrot.exe"
-# Caminho das saídas geradas pelo seu código C
-ARQUIVO_SEQ = "saida/mandelbrot_sequencial.ppm" # ou mude para .bin se preferir comparar o binário puro
-ARQUIVO_PAR = "saida/mandelbrot_paralelo.ppm"
+ARQUIVO_SEQ = "saida/mandelbrot_sequencial.bin" 
+ARQUIVO_PAR = "saida/mandelbrot_paralelo.bin"
 
 # ==========================================
 # 2. Execução
@@ -32,8 +29,7 @@ if not os.path.exists(ARQUIVO_SEQ) or not os.path.exists(ARQUIVO_PAR):
 
 print("\nComparando as saídas byte a byte...")
 
-# O shallow=False garante que o Python abra os arquivos e compare o conteúdo binário real,
-# em vez de olhar apenas os metadados (como tamanho e data de modificação).
+
 sao_iguais = filecmp.cmp(ARQUIVO_SEQ, ARQUIVO_PAR, shallow=False)
 
 if sao_iguais:
