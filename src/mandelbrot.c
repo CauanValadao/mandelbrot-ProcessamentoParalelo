@@ -105,8 +105,6 @@ void free_resultado_tempos(ResultadoTempos *resultado);
 
 int** mandelbrotSequencial(double re_min,double re_max,double im_min,double im_max,int width,int height,int max_iter, int usar_simetria);
 
-// Verifica se a regiao [im_min, im_max] e simetrica em torno do eixo real (im_min == -im_max),
-// condicao necessaria para usar mandelbrot(c) == mandelbrot(conj(c)) e economizar metade do calculo.
 static int pode_usar_simetria(double im_min, double im_max);
 
 MandelbrotParams interface();
@@ -394,7 +392,7 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
         resultado.tempos_thread[i] = (double*)malloc(sizeof(double) * resultado.num_threads);
     }
     resultado.comparacao = (ComparacaoResultado){0};
-    resultado.media_sequencial = -1.0; // Inicializa como -1 para indicar que não foi calculada
+    resultado.media_sequencial = -1.0; 
 
     if(params.is_parallel == 1){
         omp_set_num_threads(params.num_threads);
@@ -430,7 +428,7 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
                     double tempo_medio_sequencial = 0.0;
                     int i = 0;
                     if(params.comparar){
-                        tempo_medio_sequencial = tempo; // Usa o tempo da execução sequencial já calculada
+                        tempo_medio_sequencial = tempo;
                         i = 1;
                     }
                     for(; i < params.run_count; i++){
@@ -497,10 +495,6 @@ void free_resultado_tempos(ResultadoTempos *resultado) {
     }
 }
 
-// Em torno do eixo real, mandelbrot(c) e mandelbrot(conjugado(c)) tem sempre a mesma
-// quantidade de iteracoes ate escapar (a orbita de conj(c) e o conjugado da orbita de c).
-// Isso so pode ser explorado diretamente por indice de linha quando a grade de alturas
-// e simetrica em torno de zero, ou seja, quando im_min == -im_max.
 static int pode_usar_simetria(double im_min, double im_max) {
     return fabs(im_min + im_max) < 1e-9;
 }
@@ -515,19 +509,16 @@ int** mandelbrot(double re_min,double re_max,double im_min,double im_max,int wid
     double* c_realVet = (double*)malloc(sizeof(double)*width);
     double* c_imagVet = (double*)malloc(sizeof(double)*height); 
 
-    //#pragma omp parallel for schedule(static)
     for(int i = 0; i < width; i++) {
         cont[i] = &matriz[i * height];
     }
 
     // 2. Preenchimento do vetor real
-    //#pragma omp parallel for schedule(static)
     for(int i = 0; i < width; i++) {
         c_realVet[i] = re_min + ((double)i / (width - 1)) * (re_max - re_min);
     }
 
     // 3. Preenchimento do vetor imaginário
-    //#pragma omp parallel for schedule(static)
     for(int j = 0; j < height; j++) {
         c_imagVet[j] = im_min + ((double)j / (height - 1)) * (im_max - im_min);
     }
@@ -591,17 +582,14 @@ int** mandelbrotSequencial(double re_min,double re_max,double im_min,double im_m
     double* c_realVet = (double*)malloc(sizeof(double)*width);
     double* c_imagVet = (double*)malloc(sizeof(double)*height); 
 
-    //#pragma omp parallel for schedule(static)
     for(int i = 0; i < width; i++) {
         cont[i] = &matriz[i * height];
     }
 
-    // 2. Preenchimento do vetor real
     for(int i = 0; i < width; i++) {
         c_realVet[i] = re_min + ((double)i / (width - 1)) * (re_max - re_min);
     }
 
-    // 3. Preenchimento do vetor imaginário
     for(int j = 0; j < height; j++) {
         c_imagVet[j] = im_min + ((double)j / (height - 1)) * (im_max - im_min);
     }
@@ -650,8 +638,8 @@ int** mandelbrotSequencial(double re_min,double re_max,double im_min,double im_m
 
 void free_matriz(int** cont) {
     if (cont != NULL) {
-        free(cont[0]); // Libera o bloco contíguo
-        free(cont);    // Libera os ponteiros das linhas
+        free(cont[0]); 
+        free(cont);   
     }
 }
 
@@ -662,12 +650,10 @@ void salvar_ppm(const char *nome_arquivo, int **matriz, int width, int height, i
         return;
     }
 
-    // 1. Escreve o cabeçalho PPM (P6)
     fprintf(arquivo, "P6\n");
     fprintf(arquivo, "%d %d\n", width, height);
     fprintf(arquivo, "255\n");
 
-    // 2. Escreve os valores da matriz
     for (int j = 0; j < height; j++) {         // Linha (Y)
         for (int i = 0; i < width; i++) {     // Coluna (X)
             unsigned char r, g, b;
@@ -680,7 +666,6 @@ void salvar_ppm(const char *nome_arquivo, int **matriz, int width, int height, i
         }
     }
 
-    // 3. Fecha o arquivo
     fclose(arquivo);
     printf("Imagem salva com sucesso em '%s'!\n", nome_arquivo);
 }
@@ -692,7 +677,6 @@ void salvar_csv(MandelbrotParams params, EstatisticasTempo est, ComparacaoResult
         return;
     }
 
-    // Grava o cabeçalho alinhado (larguras fixas)
     fseek(arquivo_csv, 0, SEEK_END);
     if (ftell(arquivo_csv) == 0) {
         fprintf(arquivo_csv, "%-10s, %-16s, %-7s, %-13s, %-5s, %-10s, %-7s, %-5s, %-12s, %-12s, %-12s, %-12s, %-12s, %-10s, %-10s, %-10s, %-8s, %-12s, %-12s, %-12s, %-10s, %-10s, %-12s, %-10s, %s\n",
@@ -715,16 +699,14 @@ void salvar_csv(MandelbrotParams params, EstatisticasTempo est, ComparacaoResult
     char res_str[32];
     snprintf(res_str, sizeof(res_str), "%dx%d", params.width, params.height);
 
-    // Formata o vetor de médias de threads em uma única string, separados por |
     char buffer_medias[4096] = "";
     int offset = 0;
     for (int i = 0; i < est.num_threads; i++) {
         int written = snprintf(buffer_medias + offset, sizeof(buffer_medias) - offset, "%.6lf|", est.medias_por_thread[i]);
         if (written > 0 && (size_t)(offset + written) < sizeof(buffer_medias)) offset += written;
     }
-    if (offset > 0) buffer_medias[offset - 1] = '\0'; // Remove o último pipe
+    if (offset > 0) buffer_medias[offset - 1] = '\0'; 
 
-    // Grava a linha formatada alinhada exatamente com o cabeçalho
 fprintf(arquivo_csv, "%-10s, %-16s, %-7d, %-13s, %-5d, %-10s, %-7d, %-5d, %-12.6lf, %-12.6lf, %-12.6lf, %-12.6lf, %-12.6lf, %-10.4lf, %-10.4lf, %-10.6lf, %-8s, %-12.6lf, %-12.6lf, %-12.6lf, %-10.4lf, %-10lld, %-12lld, %-10s, %s\n",            
             modo_str, 
             params.cenario,
@@ -757,12 +739,9 @@ static void mapa_de_cor(int iter, int max_iter, unsigned char *r, unsigned char 
     
     // Normalização cores fundo
     double t = log(1.0 + iter) / log(1.0 + max_iter);
-    
-    // double t = (double)iter / max_iter; // Opção linear comentada pelo seu colega
-    
+        
     double um_menos_t = 1.0 - t;
     
-    // Cálculo dos canais RGB usando polinômios
     double rd = 9.0 * um_menos_t * t * t * t;
     double gd = 15.0 * um_menos_t * um_menos_t * t * t;
     double bd = 8.5 * um_menos_t * um_menos_t * um_menos_t * t;
@@ -837,7 +816,7 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
     est.num_threads = resultado->num_threads;
     est.medias_por_thread = (double*)calloc(est.num_threads, sizeof(double));
 
-    // 1. Cálculos do Tempo Global de Execução
+    // Cálculos do Tempo Global de Execução
     if (resultado->run_count > 0 && resultado->tempos_execucao != NULL) {
         est.tempo_min_exec = resultado->tempos_execucao[0];
         est.tempo_max_exec = resultado->tempos_execucao[0];
@@ -861,7 +840,7 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
         est.tempo_medio_parte_serial = soma_serial / resultado->run_count;
     }
 
-    // 2. Cálculos das Threads e Fator de Balanceamento
+    // Cálculos das Threads e Fator de Balanceamento
     est.fator_balanceamento = 1.0;
     
     if (is_parallel == 1 && resultado->tempos_thread != NULL && resultado->num_threads > 0) {
@@ -890,7 +869,6 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
                 soma_global_threads += tempo_t;
             }
             
-            // Fórmula exigida: (Tmax - Tmin) / Tmax
             double fator_rodada = (max_thread_rodada > 0.0) ? ((max_thread_rodada - min_thread_rodada) / max_thread_rodada) : 0.0;
             soma_fator += fator_rodada;
         }
@@ -912,8 +890,8 @@ EstatisticasTempo calcular_estatisticas(ResultadoTempos *resultado, int is_paral
             est.eficiencia = est.speedup / est.num_threads;
         }
         else {
-            est.speedup = -1.0; // Indica que não foi calculado
-            est.eficiencia = -1.0; // Indica que não foi calculado
+            est.speedup = -1.0; 
+            est.eficiencia = -1.0; 
         }
         
     } else if (is_parallel != 1) {
