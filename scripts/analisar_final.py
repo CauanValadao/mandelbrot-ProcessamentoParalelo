@@ -177,7 +177,6 @@ def grafico_tempo_zoom(tabela, titulo, arquivo):
         grupo = grupo.sort_values("threads_alvo")
         ax_t.plot(grupo["threads_alvo"], grupo["T_Med_Glob"], "o-", label=esc)
     
-    # Omitimos a linha do sequencial propositalmente para permitir o zoom nos valores baixos
     
     ax_t.set_xlabel("Threads")
     ax_t.set_ylabel("Tempo Médio (s)")
@@ -277,7 +276,6 @@ def grafico_simetria(tabela, titulo, arquivo):
     for simetria, grupo in tabela.groupby("Simetria"):
         grupo = grupo.sort_values("threads_alvo")
         
-        # Estilizacao: Verde continuo se COM simetria, Vermelho tracejado se SEM
         if simetria == "Aplicada":
             label = "Com Simetria"
             marker = "o-"
@@ -297,15 +295,6 @@ def grafico_simetria(tabela, titulo, arquivo):
     salvar(fig, arquivo)
 
 def grafico_composicao_tempo(tabela, titulo, arquivo):
-    """
-    Compara o tempo médio da parte serial com o tempo médio da parte
-    paralela, calculado como:
-
-        T_paralelo = T_total - T_serial
-
-    O eixo Y utiliza escala logarítmica para evidenciar diferenças
-    de magnitude entre as duas parcelas.
-    """
     if tabela.empty or "T_Med_Serial" not in tabela.columns:
         return
 
@@ -462,7 +451,6 @@ def main():
         grafico_chunk_effect(tabela_d, "Cavalos-Marinhos", "D_efeito_chunk.png")
         grafico_balanceamento_chunk(tabela_d, "Cavalos-Marinhos", "D_balanceamento_chunk.png")
 
-    # CHAMADA CORRIGIDA: Envia as métricas base (baselines) para a função de exportação
     gerar_tabela_relatorio(df, baselines)
 
 if __name__ == "__main__":
