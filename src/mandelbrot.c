@@ -388,7 +388,7 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
     resultado.run_count = params.run_count;
     resultado.num_threads = params.num_threads;
     resultado.tempos_execucao = (double*)malloc(sizeof(double) * params.run_count);
-    resultado.tempos_execucao_parte_serial = (double*)calloc(params.run_count, sizeof(double)); // NOVO: fica zerado por padrao; so e preenchido no caminho paralelo (is_parallel == 1)
+    resultado.tempos_execucao_parte_serial = (double*)calloc(params.run_count, sizeof(double));
     resultado.tempos_thread = (double**)malloc(sizeof(double*) * params.run_count);
     for(int i = 0; i < params.run_count; i++){
         resultado.tempos_thread[i] = (double*)malloc(sizeof(double) * resultado.num_threads);
@@ -403,7 +403,7 @@ ResultadoTempos rodarMandelbrot(MandelbrotParams params){
         for(int i = 0; i < params.run_count; i++){
             double tempo_inicial = omp_get_wtime();
 
-            int** cont = mandelbrot(params.re_min, params.re_max, params.im_min, params.im_max, params.width, params.height, params.max_iter, resultado.tempos_thread[i], params.usar_simetria, &resultado.tempos_execucao_parte_serial[i]); // NOVO: passa o endereco para receber, por referencia, o tempo da parte serial dessa execucao
+            int** cont = mandelbrot(params.re_min, params.re_max, params.im_min, params.im_max, params.width, params.height, params.max_iter, resultado.tempos_thread[i], params.usar_simetria, &resultado.tempos_execucao_parte_serial[i]); 
             double tempo_final = omp_get_wtime();
             resultado.tempos_execucao[i] = tempo_final - tempo_inicial;
 
@@ -481,7 +481,7 @@ void free_resultado_tempos(ResultadoTempos *resultado) {
         resultado->tempos_execucao = NULL;
     }
 
-    if (resultado->tempos_execucao_parte_serial != NULL) { // NOVO
+    if (resultado->tempos_execucao_parte_serial != NULL) {
         free(resultado->tempos_execucao_parte_serial);
         resultado->tempos_execucao_parte_serial = NULL;
     }
