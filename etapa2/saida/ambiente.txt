@@ -6,4 +6,4 @@ gcc: gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
 mpiexec: indisponivel
 Flags: -O3 -march=native (double, sem simetria)
 PROCS=[1, 2, 4, 8, 16] WEAK_PAIRS=[(2, 5793), (4, 8192), (8, 11585), (16, 16384)]
-RUN_COUNT_PAR=10 N_SEQ_REPETICOES=10 RUN_COUNT_SEQ=3
+RUN_COUNT_PAR=30 N_SEQ_REPETICOES=10 RUN_COUNT_SEQ=3
