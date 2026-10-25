@@ -28,6 +28,22 @@ CSV_MPI = sys.argv[1] if len(sys.argv) > 1 else "saida/resultados_mpi.csv"
 CSV_OMP = sys.argv[2] if len(sys.argv) > 2 else "saida/resultados_finais.csv"
 OUT = Path("graficos"); OUT.mkdir(exist_ok=True)
 
+def nucleos_fisicos():
+    """Nucleos fisicos: variavel NUCLEOS_FISICOS > psutil > fallback (logicos, com aviso)."""
+    if os.environ.get("NUCLEOS_FISICOS"):
+        return int(os.environ["NUCLEOS_FISICOS"])
+    try:
+        import psutil
+        n = psutil.cpu_count(logical=False)
+        if n:
+            return n
+    except ImportError:
+        pass
+    print("[aviso] nucleos fisicos nao detectados (pip install psutil ou defina NUCLEOS_FISICOS); usando logicos.")
+    return os.cpu_count() or 1
+
+N_FIS = nucleos_fisicos()
+
 NUM = ["Procs", "Chunk", "T_Med_Glob", "T_Med_Seq", "FatorBal", "Razao_Max_Med", "T_Comp_Med",
        "T_Espera_Med", "T_Comm_Rank0", "T_Comm_Med", "T_Escrita", "repeticao", "threads_alvo"]
 
@@ -64,10 +80,11 @@ def tabela(df, base, caso):
     t["speedup"] = t["seq_media"] / t["T_Med_Glob"]
     t["sp_min"] = (t["seq_media"] - t["seq_ic95"]) / t["T_Med_Glob"]
     t["sp_max"] = (t["seq_media"] + t["seq_ic95"]) / t["T_Med_Glob"]
-    t["efic"] = t["speedup"] / t["Procs"]
+     # denominador = min(processos, nucleos fisicos)
+    t["efic"] = t["speedup"] / t["Procs"].clip(upper=N_FIS)
     # no mestre-trabalhador so (P-1) processos calculam
-    nt = t["Procs"].where(~((t["Estrategia"] == "MasterWorker") & (t["Procs"] > 1)), t["Procs"] - 1)
-    t["efic_trab"] = t["speedup"] / nt
+    trab = t["Procs"] - ((t["Estrategia"] == "MasterWorker") & (t["Procs"] > 1)).astype(int)
+    t["efic_trab"] = t["speedup"] / trab.clip(upper=N_FIS)
     t["config"] = t.apply(lambda r: r["Estrategia"] if r["Estrategia"] == "Block"
                           else f'{r["Estrategia"]} (C={int(r["Chunk"])})', axis=1)
     return t.sort_values(["config", "Procs"])
@@ -89,7 +106,7 @@ def strong(t, titulo, prefixo):
     a1.plot(ps, ps, "--", color="gray", label="Ideal")
     a1.set(xlabel="Processos", ylabel="Speedup", title=f"Speedup - {titulo}"); a1.legend(); a1.grid(alpha=.3)
     a2.axhline(1, ls="--", color="gray")
-    a2.set(xlabel="Processos", ylabel="Eficiencia", ylim=(0, 1.15), title=f"Eficiencia - {titulo}")
+    a2.set(xlabel="Processos", ylabel="Eficiencia", ylim=(0, None), title=f"Eficiencia - {titulo}")
     a2.legend(); a2.grid(alpha=.3)
     salvar(fig, f"{prefixo}_speedup_eficiencia.png")
 
@@ -148,7 +165,7 @@ def weak(df, base):
             a1.annotate(f" {int(p)}p", (x, y1), fontsize=8); a2.annotate(f" {int(p)}p", (x, y2), fontsize=8)
     a1.set(xlabel="Resolucao (N x N)", ylabel="Tempo (s)", title="Escala fraca - tempo"); a1.legend(); a1.grid(alpha=.3)
     a2.axhline(1, ls="--", color="gray")
-    a2.set(xlabel="Resolucao (N x N)", ylabel="Eficiencia fraca", ylim=(0, 1.15), title="Escala fraca - eficiencia")
+    a2.set(xlabel="Resolucao (N x N)", ylabel="Eficiencia fraca", ylim=(0, None), title="Escala fraca - eficiencia")
     a2.legend(); a2.grid(alpha=.3)
     salvar(fig, "C_weak_scaling.png")
 
