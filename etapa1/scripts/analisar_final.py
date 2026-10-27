@@ -2,6 +2,12 @@
 """
 Le 'resultados_finais.csv' e produz as analises finais:
 Speedup, Eficiência, Fator de Balanceamento e Escalabilidade.
+
+Eficiência = Speedup / núcleos físicos utilizados, com
+núcleos físicos utilizados = min(threads, N_FIS) (mesma definição da Etapa 2 / MPI).
+Com mais threads que núcleos físicos (SMT) a eficiência pode ultrapassar 1,0.
+O número de núcleos físicos vem de NUCLEOS_FISICOS (variável de ambiente),
+ou de psutil; defina NUCLEOS_FISICOS=8 se a detecção falhar (ex.: VM/WSL2).
 """
 import os
 import sys
@@ -22,6 +28,28 @@ os.makedirs("saida", exist_ok=True)
 CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else "saida/resultados_finais.csv"
 OUT_DIR = Path("graficos")
 OUT_DIR.mkdir(exist_ok=True)
+
+def nucleos_fisicos():
+    """Nucleos fisicos: variavel NUCLEOS_FISICOS > psutil > fallback (logicos, com aviso)."""
+    if os.environ.get("NUCLEOS_FISICOS"):
+        return int(os.environ["NUCLEOS_FISICOS"])
+    try:
+        import psutil
+        n = psutil.cpu_count(logical=False)
+        if n:
+            return n
+    except ImportError:
+        pass
+    print("[aviso] nucleos fisicos nao detectados (pip install psutil ou defina NUCLEOS_FISICOS); usando logicos.")
+    return os.cpu_count() or 1
+
+N_FIS = nucleos_fisicos()
+
+def nucleos_usados(threads):
+    """min(threads, N_FIS); aceita Series ou escalar."""
+    if isinstance(threads, pd.Series):
+        return threads.clip(upper=N_FIS)
+    return min(threads, N_FIS)
 
 def carregar():
     if not os.path.exists(CSV_PATH):
@@ -62,9 +90,11 @@ def montar_tabela(df, baselines, caso):
     par["speedup"] = par["seq_media"] / par["T_Med_Glob"]
     par["speedup_min"] = (par["seq_media"] - par["seq_ic95"]) / par["T_Med_Glob"]
     par["speedup_max"] = (par["seq_media"] + par["seq_ic95"]) / par["T_Med_Glob"]
-    par["Eficiência"] = par["speedup"] / par["threads_alvo"]
-    par["Eficiência_min"] = par["speedup_min"] / par["threads_alvo"]
-    par["Eficiência_max"] = par["speedup_max"] / par["threads_alvo"]
+    # denominador = min(threads, nucleos fisicos)
+    nuc = nucleos_usados(par["threads_alvo"])
+    par["Eficiência"] = par["speedup"] / nuc
+    par["Eficiência_min"] = par["speedup_min"] / nuc
+    par["Eficiência_max"] = par["speedup_max"] / nuc
     
     # Coluna extra para diferenciar as 4 narrativas
     par["Escalonamento_Formatado"] = par["Escalonamento"].str.strip() + " (C=" + par["Chunk"].astype(str) + ")"
@@ -132,8 +162,8 @@ def grafico_strong_scaling(tabela, titulo, arquivo, arquivo_tempo=None, combine_
     ax1.set_title(f"Speedup — {titulo}"); ax1.legend(); ax1.grid(alpha=0.3)
 
     ax2.axhline(1.0, ls="--", color="gray")
-    ax2.set_xlabel("Threads"); ax2.set_ylabel("Eficiência")
-    ax2.set_ylim(0, 1.15); ax2.set_title(f"Eficiência — {titulo}")
+    ax2.set_xlabel("Threads"); ax2.set_ylabel("Eficiência (por núcleo físico)")
+    ax2.set_ylim(0, None); ax2.set_title(f"Eficiência — {titulo}")
     if not combine_chunks: ax2.legend()
     ax2.grid(alpha=0.3)
     salvar(fig, arquivo)
@@ -227,7 +257,11 @@ def grafico_weak_scaling(tabela, titulo, arquivo):
     
     ax1.plot(resolucoes, tabela["T_Med_Glob"], "o-", label="Paralelo (Dynamic, C = 16)")
     t1 = tabela["T_Med_Glob"].iloc[0]
-    ax1.axhline(t1, ls="--", color="gray", label="Ideal (constante)")
+    # Trabalho por thread constante => trabalho por nucleo fisico cresce em P / min(P, N_FIS),
+    # relativo a configuracao de referencia (primeira linha).
+    p_ref = int(threads.iloc[0])
+    fator = (threads / nucleos_usados(threads)) / (p_ref / nucleos_usados(p_ref))
+    ax1.plot(resolucoes, t1 * fator, "--", color="gray", label="Referência (E = 1 por núcleo físico)")
     
     for x, y, t in zip(resolucoes, tabela["T_Med_Glob"], threads):
         ax1.annotate(f"  {t}t", (x, y), textcoords="offset points", xytext=(5, -3), ha="left", va="center", fontsize=9, color="black", weight="bold")
@@ -235,15 +269,16 @@ def grafico_weak_scaling(tabela, titulo, arquivo):
     ax1.set_xlabel("Resolução Escalada (N)"); ax1.set_ylabel("Tempo (s)")
     ax1.set_title(f"Tempo — {titulo}"); ax1.legend(); ax1.grid(alpha=0.3)
 
-    Eficiência_fraca = t1 / tabela["T_Med_Glob"]
+    # E_w = (T_ref / T) * [(P / nucleos usados) / (P_ref / nucleos usados_ref)]
+    Eficiência_fraca = (t1 / tabela["T_Med_Glob"]) * fator
     ax2.plot(resolucoes, Eficiência_fraca, "o-", color="darkorange")
     ax2.axhline(1.0, ls="--", color="gray")
     
     for x, y, t in zip(resolucoes, Eficiência_fraca, threads):
         ax2.annotate(f"  {t}t", (x, y), textcoords="offset points", xytext=(5, -3), ha="left", va="center", fontsize=9, color="black", weight="bold")
 
-    ax2.set_xlabel("Resolução Escalada (N)"); ax2.set_ylabel("Eficiência")
-    ax2.set_ylim(0, 1.15); ax2.set_title(f"Eficiência de Escala Fraca")
+    ax2.set_xlabel("Resolução Escalada (N)"); ax2.set_ylabel("Eficiência (por núcleo físico)")
+    ax2.set_ylim(0, None); ax2.set_title(f"Eficiência de Escala Fraca")
     ax2.grid(alpha=0.3)
     salvar(fig, arquivo)
     
@@ -390,7 +425,7 @@ def gerar_tabela_relatorio(df, baselines):
         lambda r: r["seq_media"] / r["T_Med_Glob"] if r["Modo"].strip() == "Paralelo" else 1.0, axis=1
     )
     df_calc["Eficiencia_Real"] = df_calc.apply(
-        lambda r: r["Speedup_Real"] / r["Threads"] if r["Modo"].strip() == "Paralelo" else 1.0, axis=1
+        lambda r: r["Speedup_Real"] / nucleos_usados(r["Threads"]) if r["Modo"].strip() == "Paralelo" else 1.0, axis=1
     )
     
     # Substitui os -1 impressos pelo C pelos cálculos reais do Python
